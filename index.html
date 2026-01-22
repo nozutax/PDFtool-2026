@@ -27,27 +27,17 @@
     
     /* ヘッダー */
     .app-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 15px 30px;
-      background: white;
-      border-bottom: 1px solid #eaeaea;
-      margin-bottom: 30px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 15px 30px; background: white;
+      border-bottom: 1px solid #eaeaea; margin-bottom: 30px;
     }
     .brand {
-      font-weight: 700;
-      font-size: 1.25rem;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: #2d3436;
+      font-weight: 700; font-size: 1.25rem; display: flex; align-items: center; gap: 10px; color: #2d3436;
     }
     .brand i { color: var(--primary-color); font-size: 1.5rem; }
     .badge-secure {
-      background-color: #f1f2f6; color: #747d8c;
-      font-size: 0.8rem; padding: 5px 12px;
-      border-radius: 20px; font-weight: 500;
+      background-color: #f1f2f6; color: #747d8c; font-size: 0.8rem;
+      padding: 5px 12px; border-radius: 20px; font-weight: 500;
     }
 
     /* メインカード */
@@ -57,15 +47,14 @@
       padding: 30px; max-width: 900px; margin: 0 auto;
     }
 
-    /* タブナビゲーション */
+    /* タブ */
     .nav-pills {
-      background: #f1f2f6; padding: 5px;
-      border-radius: 12px; display: inline-flex; margin-bottom: 30px;
+      background: #f1f2f6; padding: 5px; border-radius: 12px;
+      display: inline-flex; margin-bottom: 30px;
     }
     .nav-pills .nav-link {
-      color: #636e72; font-weight: 500;
-      border-radius: 8px; padding: 8px 20px;
-      transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+      color: #636e72; font-weight: 500; border-radius: 8px;
+      padding: 8px 20px; transition: all 0.2s; display: flex; align-items: center; gap: 8px;
     }
     .nav-pills .nav-link.active {
       background-color: white; color: var(--primary-color);
@@ -91,26 +80,49 @@
       border-color: var(--primary-color); background-color: #f3f0ff;
     }
     .drop-zone i { font-size: 3rem; color: #b2bec3; margin-bottom: 15px; display: block; }
-    .drop-zone p { margin: 0; color: #636e72; font-weight: 500; }
     
     /* ファイルリスト */
     #file-list { margin-top: 20px; }
     .file-item {
-      background: #f8f9fa; border-radius: 8px; padding: 10px 15px;
+      background: #f8f9fa; border-radius: 8px; padding: 8px 15px;
       display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 8px; border: 1px solid #eee;
+      margin-bottom: 8px; border: 1px solid #eee; transition: background 0.2s;
     }
-    .file-name i.bi-file-earmark-image { color: #0984e3; } /* 画像アイコンの色 */
-    .remove-btn { color: #ff7675; cursor: pointer; }
+    .file-item:hover { background: #f1f2f6; }
+    
+    .file-info { display: flex; align-items: center; overflow: hidden; }
+    .file-name {
+      font-weight: 500; font-size: 0.95rem; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; max-width: 400px;
+    }
+    .file-size { font-size: 0.8rem; color: #999; margin-left: 10px; }
+
+    .file-actions { display: flex; gap: 5px; align-items: center; }
+    
+    /* 並び替えボタン */
+    .sort-btn {
+      width: 32px; height: 32px; padding: 0;
+      border-radius: 6px; border: 1px solid #dee2e6; background: white;
+      color: #636e72; display: flex; align-items: center; justify-content: center;
+    }
+    .sort-btn:hover { background: #e9ecef; color: #2d3436; }
+    .sort-btn:disabled { color: #dcdde1; border-color: #eee; cursor: default; background: #fafafa; }
+
+    /* 削除ボタン */
+    .remove-btn {
+      width: 32px; height: 32px; padding: 0;
+      border: none; background: transparent;
+      color: #ff7675; font-size: 1.2rem;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; margin-left: 5px;
+    }
+    .remove-btn:hover { color: #d63031; background: rgba(255, 118, 117, 0.1); border-radius: 50%; }
 
     /* 設定エリア */
     .settings-area { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
-    
     .custom-switch-card {
-      background-color: #f8f9fa;
-      border: 1px solid #dee2e6;
-      border-radius: 8px;
-      padding: 15px;
+      background-color: #f8f9fa; border: 1px solid #dee2e6;
+      border-radius: 8px; padding: 15px;
       display: flex; align-items: flex-start; gap: 15px; margin-bottom: 20px;
     }
     .form-switch .form-check-input { width: 3em; height: 1.5em; margin-left: 0; cursor: pointer; }
@@ -122,7 +134,6 @@
     }
     .action-btn:hover { background-color: #5849c2; color: white; }
     
-    /* ローディング */
     #loading-overlay {
       position: fixed; top:0; left:0; width:100%; height:100%;
       background: rgba(255,255,255,0.8); display: none;
@@ -172,7 +183,6 @@
         <i class="bi bi-file-earmark-pdf"></i>
         <p>ここにファイルをドロップ</p>
         <p class="sub-text" style="font-size:0.85rem; color:#b2bec3;">またはクリックして選択</p>
-        <!-- ★JPGも許可するようにacceptを変更 -->
         <input type="file" id="file-input" hidden accept="application/pdf, image/jpeg, image/jpg" multiple>
       </div>
 
@@ -286,13 +296,11 @@
       if (!files || files.length === 0) return;
 
       if (currentMode !== 'merge') {
-        // 分割・削除モードはPDFのみ＆1ファイル限定
         if (files[0].type !== 'application/pdf') {
           return alert("「分割」および「整理」機能ではPDFファイルのみ選択可能です。");
         }
         selectedFiles = [files[0]];
       } else {
-        // 結合モードはPDFとJPGを許可
         for (let i = 0; i < files.length; i++) {
           const t = files[i].type;
           if (t === 'application/pdf' || t === 'image/jpeg' || t === 'image/jpg') {
@@ -318,17 +326,54 @@
         const div = document.createElement('div');
         div.className = 'file-item';
         
-        // アイコンの切り替え (PDF or Image)
+        // アイコン (PDF or Image)
         const iconClass = (file.type === 'application/pdf') 
           ? 'bi-file-pdf text-danger' 
-          : 'bi-file-earmark-image';
+          : 'bi-file-earmark-image text-primary';
+
+        // 結合モードの場合のみ、移動ボタンを表示
+        let sortButtons = '';
+        if (currentMode === 'merge') {
+          const isFirst = index === 0;
+          const isLast = index === selectedFiles.length - 1;
+          sortButtons = `
+            <button class="sort-btn" onclick="moveFile(${index}, -1)" ${isFirst ? 'disabled' : ''} title="上へ移動">
+              <i class="bi bi-arrow-up-short"></i>
+            </button>
+            <button class="sort-btn" onclick="moveFile(${index}, 1)" ${isLast ? 'disabled' : ''} title="下へ移動">
+              <i class="bi bi-arrow-down-short"></i>
+            </button>
+          `;
+        }
 
         div.innerHTML = `
-          <div class="file-name"><i class="bi ${iconClass} me-2"></i> ${file.name}</div>
-          <div class="remove-btn" onclick="removeFile(${index})"><i class="bi bi-x-circle-fill"></i></div>
+          <div class="file-info">
+            <i class="bi ${iconClass} me-2 fs-5"></i>
+            <span class="file-name" title="${file.name}">${file.name}</span>
+            <span class="file-size">(${(file.size/1024).toFixed(0)} KB)</span>
+          </div>
+          <div class="file-actions">
+            ${sortButtons}
+            <button class="remove-btn" onclick="removeFile(${index})" title="リストから削除">
+              <i class="bi bi-x"></i>
+            </button>
+          </div>
         `;
         listEl.appendChild(div);
       });
+    }
+
+    // ファイル移動 (並び替え)
+    function moveFile(index, step) {
+      const newIndex = index + step;
+      if (newIndex < 0 || newIndex >= selectedFiles.length) return;
+      
+      // 配列要素を入れ替え
+      const temp = selectedFiles[index];
+      selectedFiles[index] = selectedFiles[newIndex];
+      selectedFiles[newIndex] = temp;
+      
+      updateUI();
     }
 
     function removeFile(index) {
@@ -373,32 +418,27 @@
       }
     }
 
-    // 1. 結合 (PDF + JPG 対応)
+    // 結合処理
     async function processMerge() {
       const mergedPdf = await PDFDocument.create();
+      // 最初のファイル名をベースにする
       const baseName = getBaseName(selectedFiles[0].name);
 
       for (const file of selectedFiles) {
         const arrayBuffer = await file.arrayBuffer();
 
         if (file.type === 'application/pdf') {
-          // PDFの場合: ページをコピーして追加
           const pdf = await PDFDocument.load(arrayBuffer);
           const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
           copiedPages.forEach((page) => mergedPdf.addPage(page));
         } 
         else if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
-          // JPGの場合: 画像を埋め込んで新しいページに描画
           const jpgImage = await mergedPdf.embedJpg(arrayBuffer);
           const jpgDims = jpgImage.scale(1);
-          
-          // 画像サイズに合わせてページを作成
           const page = mergedPdf.addPage([jpgDims.width, jpgDims.height]);
           page.drawImage(jpgImage, {
-            x: 0,
-            y: 0,
-            width: jpgDims.width,
-            height: jpgDims.height,
+            x: 0, y: 0,
+            width: jpgDims.width, height: jpgDims.height,
           });
         }
       }
@@ -409,7 +449,7 @@
       };
     }
 
-    // 2. 分割 (変更なし: PDFのみ)
+    // 分割処理
     async function processSplit() {
       const isSplitAll = document.getElementById('split-all-check').checked;
       const file = selectedFiles[0];
@@ -452,7 +492,7 @@
       }
     }
 
-    // 3. 削除 (変更なし: PDFのみ)
+    // 削除処理
     async function processDelete() {
       const rangeStr = document.getElementById('delete-range').value;
       if (!rangeStr) throw new Error("削除するページ番号を入力してください。");
