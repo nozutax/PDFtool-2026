@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+  <!-- デザイン用ライブラリ -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- PDF処理ライブラリ -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <!-- ZIP圧縮ライブラリ -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  
+  <style>
+    :root {
+      --primary-color: #6c5ce7;
+      --bg-color: #f8f9fa;
+    }
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background-color: var(--bg-color);
+      color: #333;
+      padding-bottom: 40px;
+    }
+    
+    /* ヘッダー */
+    .app-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 30px;
+      background: white;
+      border-bottom: 1px solid #eaeaea;
+      margin-bottom: 30px;
+    }
+    .brand {
+      font-weight: 700;
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #2d3436;
+    }
+    .brand i { color: var(--primary-color); font-size: 1.5rem; }
+    .badge-secure {
+      background-color: #f1f2f6; color: #747d8c;
+      font-size: 0.8rem; padding: 5px 12px;
+      border-radius: 20px; font-weight: 500;
+    }
+
+    /* メインカード */
+    .main-card {
+      background: white; border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      padding: 30px; max-width: 900px; margin: 0 auto;
+    }
+
+    /* タブナビゲーション */
+    .nav-pills {
+      background: #f1f2f6; padding: 5px;
+      border-radius: 12px; display: inline-flex; margin-bottom: 30px;
+    }
+    .nav-pills .nav-link {
+      color: #636e72; font-weight: 500;
+      border-radius: 8px; padding: 8px 20px;
+      transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+    }
+    .nav-pills .nav-link.active {
+      background-color: white; color: var(--primary-color);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-weight: 700;
+    }
+    .nav-pills .nav-link:hover:not(.active) { background-color: #dfe4ea; }
+
+    /* アップロードエリア */
+    .step-badge {
+      background-color: #eae6ff; color: var(--primary-color);
+      width: 30px; height: 30px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: bold; margin-right: 10px;
+    }
+    .section-title { font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; }
+    
+    .drop-zone {
+      border: 2px dashed #dcdde1; border-radius: 12px;
+      padding: 60px 20px; text-align: center; cursor: pointer;
+      transition: all 0.2s; background-color: #fafafa;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--primary-color); background-color: #f3f0ff;
+    }
+    .drop-zone i { font-size: 3rem; color: #b2bec3; margin-bottom: 15px; display: block; }
+    .drop-zone p { margin: 0; color: #636e72; font-weight: 500; }
+    
+    /* ファイルリスト */
+    #file-list { margin-top: 20px; }
+    .file-item {
+      background: #f8f9fa; border-radius: 8px; padding: 10px 15px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px; border: 1px solid #eee;
+    }
+    .file-name i.bi-file-earmark-image { color: #0984e3; } /* 画像アイコンの色 */
+    .remove-btn { color: #ff7675; cursor: pointer; }
+
+    /* 設定エリア */
+    .settings-area { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+    
+    .custom-switch-card {
+      background-color: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 15px;
+      display: flex; align-items: flex-start; gap: 15px; margin-bottom: 20px;
+    }
+    .form-switch .form-check-input { width: 3em; height: 1.5em; margin-left: 0; cursor: pointer; }
+    
+    .action-btn {
+      background-color: var(--primary-color); color: white;
+      border: none; padding: 12px 40px; border-radius: 8px;
+      font-weight: 600; font-size: 1rem; transition: opacity 0.2s;
+    }
+    .action-btn:hover { background-color: #5849c2; color: white; }
+    
+    /* ローディング */
+    #loading-overlay {
+      position: fixed; top:0; left:0; width:100%; height:100%;
+      background: rgba(255,255,255,0.8); display: none;
+      justify-content: center; align-items: center; z-index: 9999;
+      flex-direction: column;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ヘッダー -->
+  <header class="app-header">
+    <div class="brand"><i class="bi bi-briefcase-fill"></i> PDF Tools</div>
+    <div class="badge-secure"><i class="bi bi-shield-lock"></i> Secure Local Processing</div>
+  </header>
+
+  <div class="container">
+    
+    <!-- タブ切り替え -->
+    <div class="d-flex justify-content-center">
+      <ul class="nav nav-pills" role="tablist">
+        <li class="nav-item">
+          <button class="nav-link active" id="tab-split" onclick="setMode('split')">
+            <i class="bi bi-scissors"></i> 分割
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" id="tab-merge" onclick="setMode('merge')">
+            <i class="bi bi-files"></i> 結合
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" id="tab-delete" onclick="setMode('delete')">
+            <i class="bi bi-trash"></i> 整理 (削除)
+          </button>
+        </li>
+      </ul>
+    </div>
+
+    <!-- メインカード -->
+    <div class="main-card">
+      
+      <!-- ステップ1: アップロード -->
+      <h5 class="section-title"><span class="step-badge">1</span> ファイルをアップロード</h5>
+      
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <i class="bi bi-file-earmark-pdf"></i>
+        <p>ここにファイルをドロップ</p>
+        <p class="sub-text" style="font-size:0.85rem; color:#b2bec3;">またはクリックして選択</p>
+        <!-- ★JPGも許可するようにacceptを変更 -->
+        <input type="file" id="file-input" hidden accept="application/pdf, image/jpeg, image/jpg" multiple>
+      </div>
+
+      <div id="file-list"></div>
+
+      <!-- ステップ2: 設定 -->
+      <div id="settings-area" class="settings-area" style="display:none;">
+        <h5 class="section-title"><span class="step-badge">2</span> 設定 & 実行</h5>
+
+        <!-- 分割用の設定 -->
+        <div id="config-split" class="config-section">
+          <div class="custom-switch-card">
+            <div class="form-check form-switch m-0">
+              <input class="form-check-input" type="checkbox" id="split-all-check" onchange="toggleSplitInput()">
+            </div>
+            <div>
+              <label class="form-check-label fw-bold d-block" for="split-all-check">全ページを個別に分割する</label>
+              <small class="text-muted">チェックを入れると、全てのページをバラバラにしてZIPでダウンロードします。</small>
+            </div>
+          </div>
+
+          <div class="mb-3" id="split-range-container">
+            <label class="form-label fw-bold">抽出したいページ範囲</label>
+            <input type="text" class="form-control" id="split-range" placeholder="例: 1-3, 5 (1〜3ページと5ページを抽出)">
+          </div>
+        </div>
+
+        <!-- 結合用の設定 -->
+        <div id="config-merge" class="config-section" style="display:none;">
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> PDFとJPG画像（自動変換）を結合できます。上から順に連結されます。
+          </div>
+        </div>
+
+        <!-- 削除用の設定 -->
+        <div id="config-delete" class="config-section" style="display:none;">
+          <div class="mb-3">
+            <label class="form-label fw-bold text-danger">削除したいページ番号</label>
+            <input type="text" class="form-control" id="delete-range" placeholder="例: 2, 4 (2ページ目と4ページ目を削除)">
+          </div>
+        </div>
+
+        <div class="text-center mt-4">
+          <button id="process-btn" class="action-btn" onclick="executeProcess()">
+            処理してダウンロード <i class="bi bi-download ms-2"></i>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ローディング -->
+  <div id="loading-overlay">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+    <div class="mt-3 fw-bold text-primary">処理中...</div>
+  </div>
+
+  <script>
+    const { PDFDocument } = PDFLib;
+    let currentMode = 'split';
+    let selectedFiles = []; 
+
+    // ============================
+    // UI操作関連
+    // ============================
+
+    function setMode(mode) {
+      selectedFiles = [];
+      updateUI();
+      document.getElementById('file-input').value = ''; 
+
+      currentMode = mode;
+      
+      document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(`tab-${mode}`).classList.add('active');
+
+      document.querySelectorAll('.config-section').forEach(el => el.style.display = 'none');
+      document.getElementById(`config-${mode}`).style.display = 'block';
+    }
+
+    function toggleSplitInput() {
+      const isChecked = document.getElementById('split-all-check').checked;
+      const rangeInput = document.getElementById('split-range');
+      
+      if (isChecked) {
+        rangeInput.disabled = true;
+        rangeInput.placeholder = "全ページ分割モードが有効です";
+      } else {
+        rangeInput.disabled = false;
+        rangeInput.placeholder = "例: 1-3, 5 (1〜3ページと5ページを抽出)";
+      }
+    }
+
+    const fileInput = document.getElementById('file-input');
+    const dropZone = document.getElementById('drop-zone');
+
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault(); dropZone.classList.remove('dragover');
+      handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      handleFiles(e.target.files);
+      fileInput.value = '';
+    });
+
+    function handleFiles(files) {
+      if (!files || files.length === 0) return;
+
+      if (currentMode !== 'merge') {
+        // 分割・削除モードはPDFのみ＆1ファイル限定
+        if (files[0].type !== 'application/pdf') {
+          return alert("「分割」および「整理」機能ではPDFファイルのみ選択可能です。");
+        }
+        selectedFiles = [files[0]];
+      } else {
+        // 結合モードはPDFとJPGを許可
+        for (let i = 0; i < files.length; i++) {
+          const t = files[i].type;
+          if (t === 'application/pdf' || t === 'image/jpeg' || t === 'image/jpg') {
+            selectedFiles.push(files[i]);
+          }
+        }
+      }
+      updateUI();
+    }
+
+    function updateUI() {
+      const listEl = document.getElementById('file-list');
+      const settingsEl = document.getElementById('settings-area');
+      listEl.innerHTML = '';
+
+      if (selectedFiles.length === 0) {
+        settingsEl.style.display = 'none';
+        return;
+      }
+      settingsEl.style.display = 'block';
+
+      selectedFiles.forEach((file, index) => {
+        const div = document.createElement('div');
+        div.className = 'file-item';
+        
+        // アイコンの切り替え (PDF or Image)
+        const iconClass = (file.type === 'application/pdf') 
+          ? 'bi-file-pdf text-danger' 
+          : 'bi-file-earmark-image';
+
+        div.innerHTML = `
+          <div class="file-name"><i class="bi ${iconClass} me-2"></i> ${file.name}</div>
+          <div class="remove-btn" onclick="removeFile(${index})"><i class="bi bi-x-circle-fill"></i></div>
+        `;
+        listEl.appendChild(div);
+      });
+    }
+
+    function removeFile(index) {
+      selectedFiles.splice(index, 1);
+      updateUI();
+    }
+
+    function showLoading(show) {
+      document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+    }
+
+    function getBaseName(fileName) {
+      return fileName.replace(/\.[^/.]+$/, "");
+    }
+
+    // ============================
+    // PDF処理ロジック
+    // ============================
+    
+    async function executeProcess() {
+      if (selectedFiles.length === 0) return alert('ファイルを選択してください');
+
+      showLoading(true);
+      try {
+        let result = {};
+
+        if (currentMode === 'merge') {
+          if (selectedFiles.length < 2) throw new Error("結合するには2つ以上のファイルが必要です。");
+          result = await processMerge();
+        } else if (currentMode === 'split') {
+          result = await processSplit();
+        } else if (currentMode === 'delete') {
+          result = await processDelete();
+        }
+
+        downloadBlob(result.blob, result.filename);
+
+      } catch (e) {
+        alert("エラーが発生しました:\n" + e.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // 1. 結合 (PDF + JPG 対応)
+    async function processMerge() {
+      const mergedPdf = await PDFDocument.create();
+      const baseName = getBaseName(selectedFiles[0].name);
+
+      for (const file of selectedFiles) {
+        const arrayBuffer = await file.arrayBuffer();
+
+        if (file.type === 'application/pdf') {
+          // PDFの場合: ページをコピーして追加
+          const pdf = await PDFDocument.load(arrayBuffer);
+          const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        } 
+        else if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
+          // JPGの場合: 画像を埋め込んで新しいページに描画
+          const jpgImage = await mergedPdf.embedJpg(arrayBuffer);
+          const jpgDims = jpgImage.scale(1);
+          
+          // 画像サイズに合わせてページを作成
+          const page = mergedPdf.addPage([jpgDims.width, jpgDims.height]);
+          page.drawImage(jpgImage, {
+            x: 0,
+            y: 0,
+            width: jpgDims.width,
+            height: jpgDims.height,
+          });
+        }
+      }
+      const pdfBytes = await mergedPdf.save();
+      return { 
+        blob: new Blob([pdfBytes], { type: "application/pdf" }), 
+        filename: `${baseName}_merged.pdf` 
+      };
+    }
+
+    // 2. 分割 (変更なし: PDFのみ)
+    async function processSplit() {
+      const isSplitAll = document.getElementById('split-all-check').checked;
+      const file = selectedFiles[0];
+      const baseName = getBaseName(file.name);
+      const arrayBuffer = await file.arrayBuffer();
+      const srcPdf = await PDFDocument.load(arrayBuffer);
+      const totalPages = srcPdf.getPageCount();
+
+      if (isSplitAll) {
+        const zip = new JSZip();
+        for (let i = 0; i < totalPages; i++) {
+          const newPdf = await PDFDocument.create();
+          const [copiedPage] = await newPdf.copyPages(srcPdf, [i]);
+          newPdf.addPage(copiedPage);
+          const pdfBytes = await newPdf.save();
+          zip.file(`${baseName}_p${i + 1}.pdf`, pdfBytes);
+        }
+        const zipBlob = await zip.generateAsync({type:"blob"});
+        return { 
+          blob: zipBlob, 
+          filename: `${baseName}_pages.zip` 
+        };
+
+      } else {
+        const rangeStr = document.getElementById('split-range').value;
+        if (!rangeStr) throw new Error("ページ範囲を入力してください。");
+
+        const pagesToKeep = parseRange(rangeStr, totalPages);
+        if (pagesToKeep.length === 0) throw new Error("有効なページ範囲ではありません。");
+
+        const newPdf = await PDFDocument.create();
+        const copiedPages = await newPdf.copyPages(srcPdf, pagesToKeep);
+        copiedPages.forEach(page => newPdf.addPage(page));
+
+        const pdfBytes = await newPdf.save();
+        return { 
+          blob: new Blob([pdfBytes], { type: "application/pdf" }), 
+          filename: `${baseName}_extracted.pdf` 
+        };
+      }
+    }
+
+    // 3. 削除 (変更なし: PDFのみ)
+    async function processDelete() {
+      const rangeStr = document.getElementById('delete-range').value;
+      if (!rangeStr) throw new Error("削除するページ番号を入力してください。");
+
+      const file = selectedFiles[0];
+      const baseName = getBaseName(file.name);
+      const arrayBuffer = await file.arrayBuffer();
+      const srcPdf = await PDFDocument.load(arrayBuffer);
+      const totalPages = srcPdf.getPageCount();
+
+      const pagesToDelete = parseRange(rangeStr, totalPages);
+      const pagesToKeep = [];
+      for (let i = 0; i < totalPages; i++) {
+        if (!pagesToDelete.includes(i)) pagesToKeep.push(i);
+      }
+
+      if (pagesToKeep.length === 0) throw new Error("すべてのページが削除されてしまいます。");
+
+      const newPdf = await PDFDocument.create();
+      const copiedPages = await newPdf.copyPages(srcPdf, pagesToKeep);
+      copiedPages.forEach(page => newPdf.addPage(page));
+
+      const pdfBytes = await newPdf.save();
+      return { 
+        blob: new Blob([pdfBytes], { type: "application/pdf" }), 
+        filename: `${baseName}_cleaned.pdf` 
+      };
+    }
+
+    function downloadBlob(blob, fileName) {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function parseRange(input, maxPages) {
+      const pages = new Set();
+      const parts = input.split(/[,、]/);
+      parts.forEach(part => {
+        const range = part.trim().split('-');
+        if (range.length === 1) {
+          const p = parseInt(range[0]);
+          if (!isNaN(p) && p >= 1 && p <= maxPages) pages.add(p - 1);
+        } else if (range.length === 2) {
+          const start = parseInt(range[0]);
+          const end = parseInt(range[1]);
+          if (!isNaN(start) && !isNaN(end)) {
+            const s = Math.min(start, end);
+            const e = Math.max(start, end);
+            for (let i = s; i <= e; i++) {
+              if (i >= 1 && i <= maxPages) pages.add(i - 1);
+            }
+          }
+        }
+      });
+      return Array.from(pages).sort((a, b) => a - b);
+    }
+  </script>
+</body>
+</html>
