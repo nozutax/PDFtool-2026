@@ -12,6 +12,8 @@
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <!-- ZIP圧縮ライブラリ -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- PDF描画（圧縮用） -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   
   <style>
     :root {
@@ -140,6 +142,32 @@
       justify-content: center; align-items: center; z-index: 9999;
       flex-direction: column;
     }
+
+    .compress-estimate {
+      background: #f3f0ff; border: 1px solid #dcd6ff; border-radius: 10px;
+      padding: 16px 18px; margin-top: 8px;
+    }
+    .compress-estimate .estimate-row {
+      display: flex; justify-content: space-between; gap: 12px;
+      font-size: 0.95rem; margin-bottom: 6px;
+    }
+    .compress-estimate .estimate-row:last-child { margin-bottom: 0; }
+    .compress-estimate .estimate-label { color: #636e72; }
+    .compress-estimate .estimate-value { font-weight: 700; color: #2d3436; }
+    .compress-estimate .estimate-saving { color: #00b894; }
+    .compress-estimate .estimate-grow { color: #e17055; }
+    .compress-estimate .estimate-pending { color: #6c5ce7; font-weight: 500; }
+    .range-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .range-value {
+      font-weight: 700; color: var(--primary-color); font-variant-numeric: tabular-nums;
+    }
+    .form-range { cursor: pointer; }
+    .compress-note {
+      font-size: 0.85rem; color: #747d8c; margin-top: 12px; line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -168,6 +196,11 @@
         <li class="nav-item">
           <button class="nav-link" id="tab-delete" onclick="setMode('delete')">
             <i class="bi bi-trash"></i> 整理 (削除)
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" id="tab-compress" onclick="setMode('compress')">
+            <i class="bi bi-file-zip"></i> 圧縮
           </button>
         </li>
       </ul>
@@ -225,6 +258,56 @@
           </div>
         </div>
 
+        <!-- 圧縮用の設定 -->
+        <div id="config-compress" class="config-section" style="display:none;">
+          <div class="mb-4">
+            <div class="range-header">
+              <label class="form-label fw-bold mb-0" for="compress-quality">画質（JPEG）</label>
+              <span class="range-value" id="compress-quality-label">70%</span>
+            </div>
+            <input type="range" class="form-range" id="compress-quality" min="20" max="95" step="5" value="70"
+              oninput="onCompressSettingChange()">
+            <div class="d-flex justify-content-between small text-muted">
+              <span>小さい</span>
+              <span>きれい</span>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <div class="range-header">
+              <label class="form-label fw-bold mb-0" for="compress-scale">解像度</label>
+              <span class="range-value" id="compress-scale-label">100%</span>
+            </div>
+            <input type="range" class="form-range" id="compress-scale" min="50" max="150" step="10" value="100"
+              oninput="onCompressSettingChange()">
+            <div class="d-flex justify-content-between small text-muted">
+              <span>粗い</span>
+              <span>精細</span>
+            </div>
+          </div>
+
+          <div class="compress-estimate" id="compress-estimate-box">
+            <div class="estimate-row">
+              <span class="estimate-label">元のサイズ</span>
+              <span class="estimate-value" id="compress-original-size">—</span>
+            </div>
+            <div class="estimate-row">
+              <span class="estimate-label">推定サイズ</span>
+              <span class="estimate-value" id="compress-estimated-size">
+                <span class="estimate-pending">ファイルを選択すると計算します</span>
+              </span>
+            </div>
+            <div class="estimate-row">
+              <span class="estimate-label">見込み</span>
+              <span class="estimate-value" id="compress-saving">—</span>
+            </div>
+          </div>
+          <p class="compress-note">
+            <i class="bi bi-info-circle"></i>
+            各ページを画像化して再圧縮します。テキストの選択はできなくなります。テキスト中心の軽いPDFでは、サイズが増える場合があります。
+          </p>
+        </div>
+
         <div class="text-center mt-4">
           <button id="process-btn" class="action-btn" onclick="executeProcess()">
             処理してダウンロード <i class="bi bi-download ms-2"></i>
@@ -238,13 +321,22 @@
   <!-- ローディング -->
   <div id="loading-overlay">
     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
-    <div class="mt-3 fw-bold text-primary">処理中...</div>
+    <div class="mt-3 fw-bold text-primary" id="loading-message">処理中...</div>
   </div>
 
   <script>
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
     const { PDFDocument } = PDFLib;
     let currentMode = 'split';
-    let selectedFiles = []; 
+    let selectedFiles = [];
+    let compressEstimateTimer = null;
+    let compressEstimateToken = 0;
+    let compressEstimateReady = false;
+    let compressPagesCache = null; // { key, pages }
 
     // ============================
     // UI操作関連
@@ -252,22 +344,28 @@
 
     function setMode(mode) {
       selectedFiles = [];
+      compressEstimateReady = false;
       updateUI();
-      document.getElementById('file-input').value = ''; 
+      document.getElementById('file-input').value = '';
 
       currentMode = mode;
-      
+
       document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
       document.getElementById(`tab-${mode}`).classList.add('active');
 
       document.querySelectorAll('.config-section').forEach(el => el.style.display = 'none');
       document.getElementById(`config-${mode}`).style.display = 'block';
+
+      if (mode === 'compress') {
+        syncCompressLabels();
+        resetCompressEstimateUI();
+      }
     }
 
     function toggleSplitInput() {
       const isChecked = document.getElementById('split-all-check').checked;
       const rangeInput = document.getElementById('split-range');
-      
+
       if (isChecked) {
         rangeInput.disabled = true;
         rangeInput.placeholder = "全ページ分割モードが有効です";
@@ -297,7 +395,7 @@
 
       if (currentMode !== 'merge') {
         if (files[0].type !== 'application/pdf') {
-          return alert("「分割」および「整理」機能ではPDFファイルのみ選択可能です。");
+          return alert("この機能ではPDFファイルのみ選択可能です。");
         }
         selectedFiles = [files[0]];
       } else {
@@ -318,6 +416,7 @@
 
       if (selectedFiles.length === 0) {
         settingsEl.style.display = 'none';
+        if (currentMode === 'compress') resetCompressEstimateUI();
         return;
       }
       settingsEl.style.display = 'block';
@@ -325,13 +424,11 @@
       selectedFiles.forEach((file, index) => {
         const div = document.createElement('div');
         div.className = 'file-item';
-        
-        // アイコン (PDF or Image)
-        const iconClass = (file.type === 'application/pdf') 
-          ? 'bi-file-pdf text-danger' 
+
+        const iconClass = (file.type === 'application/pdf')
+          ? 'bi-file-pdf text-danger'
           : 'bi-file-earmark-image text-primary';
 
-        // 結合モードの場合のみ、移動ボタンを表示
         let sortButtons = '';
         if (currentMode === 'merge') {
           const isFirst = index === 0;
@@ -350,7 +447,7 @@
           <div class="file-info">
             <i class="bi ${iconClass} me-2 fs-5"></i>
             <span class="file-name" title="${file.name}">${file.name}</span>
-            <span class="file-size">(${(file.size/1024).toFixed(0)} KB)</span>
+            <span class="file-size">(${formatBytes(file.size)})</span>
           </div>
           <div class="file-actions">
             ${sortButtons}
@@ -361,18 +458,21 @@
         `;
         listEl.appendChild(div);
       });
+
+      if (currentMode === 'compress') {
+        document.getElementById('compress-original-size').textContent = formatBytes(selectedFiles[0].size);
+        scheduleCompressEstimate();
+      }
     }
 
-    // ファイル移動 (並び替え)
     function moveFile(index, step) {
       const newIndex = index + step;
       if (newIndex < 0 || newIndex >= selectedFiles.length) return;
-      
-      // 配列要素を入れ替え
+
       const temp = selectedFiles[index];
       selectedFiles[index] = selectedFiles[newIndex];
       selectedFiles[newIndex] = temp;
-      
+
       updateUI();
     }
 
@@ -381,20 +481,188 @@
       updateUI();
     }
 
-    function showLoading(show) {
+    function showLoading(show, message) {
       document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+      document.getElementById('loading-message').textContent = message || '処理中...';
     }
 
     function getBaseName(fileName) {
       return fileName.replace(/\.[^/.]+$/, "");
     }
 
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function syncCompressLabels() {
+      const quality = Number(document.getElementById('compress-quality').value);
+      const scalePct = Number(document.getElementById('compress-scale').value);
+      document.getElementById('compress-quality-label').textContent = quality + '%';
+      document.getElementById('compress-scale-label').textContent = scalePct + '%';
+    }
+
+    function onCompressSettingChange() {
+      syncCompressLabels();
+      if (currentMode === 'compress' && selectedFiles.length > 0) {
+        scheduleCompressEstimate();
+      }
+    }
+
+    function resetCompressEstimateUI() {
+      compressEstimateReady = false;
+      document.getElementById('compress-original-size').textContent = '—';
+      document.getElementById('compress-estimated-size').innerHTML =
+        '<span class="estimate-pending">ファイルを選択すると計算します</span>';
+      document.getElementById('compress-saving').textContent = '—';
+      updateProcessButtonState();
+    }
+
+    function updateProcessButtonState() {
+      const btn = document.getElementById('process-btn');
+      if (currentMode === 'compress') {
+        btn.disabled = !compressEstimateReady || selectedFiles.length === 0;
+        btn.style.opacity = btn.disabled ? '0.55' : '1';
+        btn.style.cursor = btn.disabled ? 'not-allowed' : 'pointer';
+      } else {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+      }
+    }
+
+    function scheduleCompressEstimate() {
+      syncCompressLabels();
+      compressEstimateReady = false;
+      invalidateCompressCache();
+      updateProcessButtonState();
+      document.getElementById('compress-estimated-size').innerHTML =
+        '<span class="estimate-pending">推定サイズを計算中...</span>';
+      document.getElementById('compress-saving').textContent = '—';
+
+      const token = ++compressEstimateToken;
+      clearTimeout(compressEstimateTimer);
+      compressEstimateTimer = setTimeout(() => {
+        runCompressEstimate(token).catch((e) => {
+          if (token !== compressEstimateToken) return;
+          document.getElementById('compress-estimated-size').innerHTML =
+            '<span class="estimate-grow">計算に失敗しました</span>';
+          document.getElementById('compress-saving').textContent = e.message || 'エラー';
+          compressEstimateReady = false;
+          updateProcessButtonState();
+        });
+      }, 350);
+    }
+
+    async function runCompressEstimate(token) {
+      if (currentMode !== 'compress' || selectedFiles.length === 0) return;
+      if (typeof pdfjsLib === 'undefined') {
+        throw new Error('PDF.js の読み込みに失敗しています（ネットワークを確認してください）');
+      }
+
+      const file = selectedFiles[0];
+      const settings = getCompressSettings();
+      const pages = await rasterizePdfToJpegs(file, settings, {
+        token,
+        isCancelled: () => token !== compressEstimateToken || currentMode !== 'compress',
+        onProgress: (done, total) => {
+          if (token !== compressEstimateToken) return;
+          document.getElementById('compress-estimated-size').innerHTML =
+            `<span class="estimate-pending">推定中... ${done}/${total} ページ</span>`;
+        }
+      });
+
+      if (token !== compressEstimateToken) return;
+      if (!pages.length) throw new Error('ページを処理できませんでした。');
+
+      // JPEG合計 + ページあたりのPDF構造オーバーヘッドの概算
+      const jpegTotal = pages.reduce((sum, p) => sum + p.bytes.byteLength, 0);
+      const estimated = jpegTotal + pages.length * 1200 + 2048;
+      const original = file.size;
+      const ratio = original > 0 ? ((original - estimated) / original) * 100 : 0;
+
+      document.getElementById('compress-estimated-size').textContent = formatBytes(estimated) + '（目安）';
+
+      const savingEl = document.getElementById('compress-saving');
+      if (ratio >= 1) {
+        savingEl.className = 'estimate-value estimate-saving';
+        savingEl.textContent = `約 ${ratio.toFixed(0)}% 削減`;
+      } else if (ratio <= -1) {
+        savingEl.className = 'estimate-value estimate-grow';
+        savingEl.textContent = `約 ${Math.abs(ratio).toFixed(0)}% 増加の見込み`;
+      } else {
+        savingEl.className = 'estimate-value';
+        savingEl.textContent = 'ほぼ同程度';
+      }
+
+      compressPagesCache = { key: getCompressCacheKey(file, settings), pages };
+      compressEstimateReady = true;
+      updateProcessButtonState();
+    }
+
+    function getCompressSettings() {
+      return {
+        quality: Number(document.getElementById('compress-quality').value) / 100,
+        scale: Number(document.getElementById('compress-scale').value) / 100
+      };
+    }
+
+    function getCompressCacheKey(file, settings) {
+      return [file.name, file.size, file.lastModified, settings.quality, settings.scale].join('|');
+    }
+
+    function invalidateCompressCache() {
+      compressPagesCache = null;
+    }
+
+    async function rasterizePdfToJpegs(file, settings, opts = {}) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+      const total = pdf.numPages;
+      const pages = [];
+
+      for (let i = 1; i <= total; i++) {
+        if (opts.isCancelled && opts.isCancelled()) {
+          return pages;
+        }
+        if (opts.onProgress) opts.onProgress(i - 1, total);
+
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: settings.scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.floor(viewport.width));
+        canvas.height = Math.max(1, Math.floor(viewport.height));
+        const ctx = canvas.getContext('2d', { alpha: false });
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        const blob = await new Promise((resolve, reject) => {
+          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('JPEG変換に失敗しました'))), 'image/jpeg', settings.quality);
+        });
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        pages.push({ bytes, width: canvas.width, height: canvas.height });
+
+        canvas.width = 0;
+        canvas.height = 0;
+
+        if (opts.onProgress) opts.onProgress(i, total);
+      }
+
+      return pages;
+    }
+
     // ============================
     // PDF処理ロジック
     // ============================
-    
+
     async function executeProcess() {
       if (selectedFiles.length === 0) return alert('ファイルを選択してください');
+      if (currentMode === 'compress' && !compressEstimateReady) {
+        return alert('推定サイズの計算が終わるまでお待ちください。');
+      }
 
       showLoading(true);
       try {
@@ -407,6 +675,8 @@
           result = await processSplit();
         } else if (currentMode === 'delete') {
           result = await processDelete();
+        } else if (currentMode === 'compress') {
+          result = await processCompress();
         }
 
         downloadBlob(result.blob, result.filename);
@@ -418,10 +688,47 @@
       }
     }
 
+    async function processCompress() {
+      const file = selectedFiles[0];
+      const settings = getCompressSettings();
+      const cacheKey = getCompressCacheKey(file, settings);
+
+      let pages;
+      if (compressPagesCache && compressPagesCache.key === cacheKey) {
+        pages = compressPagesCache.pages;
+        showLoading(true, 'PDFを組み立て中...');
+      } else {
+        pages = await rasterizePdfToJpegs(file, settings, {
+          onProgress: (done, total) => {
+            showLoading(true, `圧縮中... ${done}/${total} ページ`);
+          }
+        });
+        compressPagesCache = { key: cacheKey, pages };
+      }
+
+      if (pages.length === 0) throw new Error('ページを処理できませんでした。');
+
+      showLoading(true, 'PDFを組み立て中...');
+      const outPdf = await PDFDocument.create();
+      for (const page of pages) {
+        const jpg = await outPdf.embedJpg(page.bytes);
+        const pdfPage = outPdf.addPage([page.width, page.height]);
+        pdfPage.drawImage(jpg, {
+          x: 0, y: 0,
+          width: page.width, height: page.height
+        });
+      }
+
+      const pdfBytes = await outPdf.save();
+      return {
+        blob: new Blob([pdfBytes], { type: 'application/pdf' }),
+        filename: `${getBaseName(file.name)}_compressed.pdf`
+      };
+    }
+
     // 結合処理
     async function processMerge() {
       const mergedPdf = await PDFDocument.create();
-      // 最初のファイル名をベースにする
       const baseName = getBaseName(selectedFiles[0].name);
 
       for (const file of selectedFiles) {
@@ -431,7 +738,7 @@
           const pdf = await PDFDocument.load(arrayBuffer);
           const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
           copiedPages.forEach((page) => mergedPdf.addPage(page));
-        } 
+        }
         else if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
           const jpgImage = await mergedPdf.embedJpg(arrayBuffer);
           const jpgDims = jpgImage.scale(1);
@@ -443,9 +750,9 @@
         }
       }
       const pdfBytes = await mergedPdf.save();
-      return { 
-        blob: new Blob([pdfBytes], { type: "application/pdf" }), 
-        filename: `${baseName}_merged.pdf` 
+      return {
+        blob: new Blob([pdfBytes], { type: "application/pdf" }),
+        filename: `${baseName}_merged.pdf`
       };
     }
 
@@ -468,9 +775,9 @@
           zip.file(`${baseName}_p${i + 1}.pdf`, pdfBytes);
         }
         const zipBlob = await zip.generateAsync({type:"blob"});
-        return { 
-          blob: zipBlob, 
-          filename: `${baseName}_pages.zip` 
+        return {
+          blob: zipBlob,
+          filename: `${baseName}_pages.zip`
         };
 
       } else {
@@ -485,9 +792,9 @@
         copiedPages.forEach(page => newPdf.addPage(page));
 
         const pdfBytes = await newPdf.save();
-        return { 
-          blob: new Blob([pdfBytes], { type: "application/pdf" }), 
-          filename: `${baseName}_extracted.pdf` 
+        return {
+          blob: new Blob([pdfBytes], { type: "application/pdf" }),
+          filename: `${baseName}_extracted.pdf`
         };
       }
     }
@@ -516,9 +823,9 @@
       copiedPages.forEach(page => newPdf.addPage(page));
 
       const pdfBytes = await newPdf.save();
-      return { 
-        blob: new Blob([pdfBytes], { type: "application/pdf" }), 
-        filename: `${baseName}_cleaned.pdf` 
+      return {
+        blob: new Blob([pdfBytes], { type: "application/pdf" }),
+        filename: `${baseName}_cleaned.pdf`
       };
     }
 
