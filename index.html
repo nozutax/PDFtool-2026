@@ -304,7 +304,7 @@
           </div>
           <p class="compress-note">
             <i class="bi bi-info-circle"></i>
-            各ページを画像化して再圧縮します。テキストの選択はできなくなります。テキスト中心の軽いPDFでは、サイズが増える場合があります。
+            各ページを画像化して再圧縮します。テキストの選択はできなくなります。テキスト中心の軽いPDFでは、サイズが増える場合があります。推定はまず粗い目安を表示し、続けて数ページのサンプルで精度を上げます。計算中でもダウンロードできます。
           </p>
         </div>
 
@@ -335,8 +335,9 @@
     let selectedFiles = [];
     let compressEstimateTimer = null;
     let compressEstimateToken = 0;
-    let compressEstimateReady = false;
-    let compressPagesCache = null; // { key, pages }
+    // 推定用: 本番スケールに対する描画倍率（低解像度で高速化）
+    const COMPRESS_ESTIMATE_SCALE_RATIO = 0.55;
+    const COMPRESS_ESTIMATE_MAX_SAMPLES = 3;
 
     // ============================
     // UI操作関連
@@ -344,7 +345,6 @@
 
     function setMode(mode) {
       selectedFiles = [];
-      compressEstimateReady = false;
       updateUI();
       document.getElementById('file-input').value = '';
 
@@ -360,6 +360,7 @@
         syncCompressLabels();
         resetCompressEstimateUI();
       }
+      updateProcessButtonState();
     }
 
     function toggleSplitInput() {
@@ -417,6 +418,7 @@
       if (selectedFiles.length === 0) {
         settingsEl.style.display = 'none';
         if (currentMode === 'compress') resetCompressEstimateUI();
+        updateProcessButtonState();
         return;
       }
       settingsEl.style.display = 'block';
@@ -463,6 +465,7 @@
         document.getElementById('compress-original-size').textContent = formatBytes(selectedFiles[0].size);
         scheduleCompressEstimate();
       }
+      updateProcessButtonState();
     }
 
     function moveFile(index, step) {
@@ -511,7 +514,8 @@
     }
 
     function resetCompressEstimateUI() {
-      compressEstimateReady = false;
+      compressEstimateToken++;
+      clearTimeout(compressEstimateTimer);
       document.getElementById('compress-original-size').textContent = '—';
       document.getElementById('compress-estimated-size').innerHTML =
         '<span class="estimate-pending">ファイルを選択すると計算します</span>';
@@ -519,71 +523,20 @@
       updateProcessButtonState();
     }
 
+    // 圧縮モードではファイルがあれば推定完了を待たずダウンロード可能（案X）
     function updateProcessButtonState() {
       const btn = document.getElementById('process-btn');
-      if (currentMode === 'compress') {
-        btn.disabled = !compressEstimateReady || selectedFiles.length === 0;
-        btn.style.opacity = btn.disabled ? '0.55' : '1';
-        btn.style.cursor = btn.disabled ? 'not-allowed' : 'pointer';
-      } else {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.cursor = 'pointer';
-      }
+      const disabled = currentMode === 'compress' && selectedFiles.length === 0;
+      btn.disabled = disabled;
+      btn.style.opacity = disabled ? '0.55' : '1';
+      btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
     }
 
-    function scheduleCompressEstimate() {
-      syncCompressLabels();
-      compressEstimateReady = false;
-      invalidateCompressCache();
-      updateProcessButtonState();
-      document.getElementById('compress-estimated-size').innerHTML =
-        '<span class="estimate-pending">推定サイズを計算中...</span>';
-      document.getElementById('compress-saving').textContent = '—';
+    function applyCompressEstimateDisplay(estimated, original, label) {
+      document.getElementById('compress-estimated-size').textContent =
+        formatBytes(estimated) + label;
 
-      const token = ++compressEstimateToken;
-      clearTimeout(compressEstimateTimer);
-      compressEstimateTimer = setTimeout(() => {
-        runCompressEstimate(token).catch((e) => {
-          if (token !== compressEstimateToken) return;
-          document.getElementById('compress-estimated-size').innerHTML =
-            '<span class="estimate-grow">計算に失敗しました</span>';
-          document.getElementById('compress-saving').textContent = e.message || 'エラー';
-          compressEstimateReady = false;
-          updateProcessButtonState();
-        });
-      }, 350);
-    }
-
-    async function runCompressEstimate(token) {
-      if (currentMode !== 'compress' || selectedFiles.length === 0) return;
-      if (typeof pdfjsLib === 'undefined') {
-        throw new Error('PDF.js の読み込みに失敗しています（ネットワークを確認してください）');
-      }
-
-      const file = selectedFiles[0];
-      const settings = getCompressSettings();
-      const pages = await rasterizePdfToJpegs(file, settings, {
-        token,
-        isCancelled: () => token !== compressEstimateToken || currentMode !== 'compress',
-        onProgress: (done, total) => {
-          if (token !== compressEstimateToken) return;
-          document.getElementById('compress-estimated-size').innerHTML =
-            `<span class="estimate-pending">推定中... ${done}/${total} ページ</span>`;
-        }
-      });
-
-      if (token !== compressEstimateToken) return;
-      if (!pages.length) throw new Error('ページを処理できませんでした。');
-
-      // JPEG合計 + ページあたりのPDF構造オーバーヘッドの概算
-      const jpegTotal = pages.reduce((sum, p) => sum + p.bytes.byteLength, 0);
-      const estimated = jpegTotal + pages.length * 1200 + 2048;
-      const original = file.size;
       const ratio = original > 0 ? ((original - estimated) / original) * 100 : 0;
-
-      document.getElementById('compress-estimated-size').textContent = formatBytes(estimated) + '（目安）';
-
       const savingEl = document.getElementById('compress-saving');
       if (ratio >= 1) {
         savingEl.className = 'estimate-value estimate-saving';
@@ -595,10 +548,101 @@
         savingEl.className = 'estimate-value';
         savingEl.textContent = 'ほぼ同程度';
       }
+    }
 
-      compressPagesCache = { key: getCompressCacheKey(file, settings), pages };
-      compressEstimateReady = true;
+    // 案Z: 描画なしの即時ざっくり推定
+    function roughCompressEstimateBytes(originalSize, settings) {
+      const area = settings.scale * settings.scale;
+      // 画質が高いほど残るバイトが増える（経験的な係数）
+      const qualityFactor = 0.18 + settings.quality * 0.72;
+      const estimated = Math.round(originalSize * area * qualityFactor * 0.9);
+      return Math.max(2048, estimated);
+    }
+
+    function pickCompressSamplePages(totalPages) {
+      if (totalPages <= COMPRESS_ESTIMATE_MAX_SAMPLES) {
+        return Array.from({ length: totalPages }, (_, i) => i + 1);
+      }
+      const mid = Math.max(2, Math.ceil(totalPages / 2));
+      return [...new Set([1, mid, totalPages])].sort((a, b) => a - b);
+    }
+
+    function scheduleCompressEstimate() {
+      syncCompressLabels();
+      if (selectedFiles.length === 0) return;
+
+      const file = selectedFiles[0];
+      const settings = getCompressSettings();
+      const original = file.size;
+
+      // 即時: 粗い目安を先出し（案Z）— ダウンロードはブロックしない
+      const rough = roughCompressEstimateBytes(original, settings);
+      applyCompressEstimateDisplay(rough, original, '（粗い目安）');
       updateProcessButtonState();
+
+      const token = ++compressEstimateToken;
+      clearTimeout(compressEstimateTimer);
+      // 短いデバウンス後にサンプル推定（案C）
+      compressEstimateTimer = setTimeout(() => {
+        runSampleCompressEstimate(token).catch((e) => {
+          if (token !== compressEstimateToken) return;
+          // 粗い目安は残し、補足だけ更新
+          const savingEl = document.getElementById('compress-saving');
+          const prev = savingEl.textContent;
+          savingEl.className = 'estimate-value';
+          savingEl.textContent = (prev && prev !== '—')
+            ? `${prev}（サンプル推定はスキップ）`
+            : 'サンプル推定はスキップ';
+          console.warn('compress sample estimate failed', e);
+        });
+      }, 200);
+    }
+
+    // 案C: 低解像度 × 少数ページサンプルで精度を上げる
+    async function runSampleCompressEstimate(token) {
+      if (currentMode !== 'compress' || selectedFiles.length === 0) return;
+      if (typeof pdfjsLib === 'undefined') {
+        throw new Error('PDF.js の読み込みに失敗しています（ネットワークを確認してください）');
+      }
+
+      const file = selectedFiles[0];
+      const settings = getCompressSettings();
+      const original = file.size;
+
+      document.getElementById('compress-estimated-size').innerHTML =
+        '<span class="estimate-pending">サンプル推定中...</span>';
+
+      const arrayBuffer = await file.arrayBuffer();
+      if (token !== compressEstimateToken) return;
+
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+      if (token !== compressEstimateToken) return;
+
+      const totalPages = pdf.numPages;
+      const samplePages = pickCompressSamplePages(totalPages);
+      const estimateScale = Math.max(0.25, settings.scale * COMPRESS_ESTIMATE_SCALE_RATIO);
+      const sampleSettings = { quality: settings.quality, scale: estimateScale };
+
+      const sampleSizes = [];
+      for (let i = 0; i < samplePages.length; i++) {
+        if (token !== compressEstimateToken || currentMode !== 'compress') return;
+        document.getElementById('compress-estimated-size').innerHTML =
+          `<span class="estimate-pending">サンプル推定中... ${i + 1}/${samplePages.length}</span>`;
+
+        const page = await rasterizeSinglePageToJpeg(pdf, samplePages[i], sampleSettings);
+        sampleSizes.push(page.bytes.byteLength);
+      }
+
+      if (token !== compressEstimateToken) return;
+      if (!sampleSizes.length) throw new Error('サンプルを処理できませんでした。');
+
+      const avgJpeg = sampleSizes.reduce((a, b) => a + b, 0) / sampleSizes.length;
+      // 低解像度サンプル → 本番スケールへ外挿（面積比に近い指数）
+      const scaleRatio = settings.scale / estimateScale;
+      const extrapolatedPerPage = avgJpeg * Math.pow(scaleRatio, 1.85);
+      const estimated = Math.round(extrapolatedPerPage * totalPages + totalPages * 1200 + 2048);
+
+      applyCompressEstimateDisplay(estimated, original, '（サンプル推定）');
     }
 
     function getCompressSettings() {
@@ -608,12 +652,26 @@
       };
     }
 
-    function getCompressCacheKey(file, settings) {
-      return [file.name, file.size, file.lastModified, settings.quality, settings.scale].join('|');
-    }
+    async function rasterizeSinglePageToJpeg(pdf, pageNumber, settings) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: settings.scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.floor(viewport.width));
+      canvas.height = Math.max(1, Math.floor(viewport.height));
+      const ctx = canvas.getContext('2d', { alpha: false });
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    function invalidateCompressCache() {
-      compressPagesCache = null;
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('JPEG変換に失敗しました'))), 'image/jpeg', settings.quality);
+      });
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const result = { bytes, width: canvas.width, height: canvas.height };
+      canvas.width = 0;
+      canvas.height = 0;
+      return result;
     }
 
     async function rasterizePdfToJpegs(file, settings, opts = {}) {
@@ -628,25 +686,8 @@
         }
         if (opts.onProgress) opts.onProgress(i - 1, total);
 
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: settings.scale });
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.floor(viewport.width));
-        canvas.height = Math.max(1, Math.floor(viewport.height));
-        const ctx = canvas.getContext('2d', { alpha: false });
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        await page.render({ canvasContext: ctx, viewport }).promise;
-
-        const blob = await new Promise((resolve, reject) => {
-          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('JPEG変換に失敗しました'))), 'image/jpeg', settings.quality);
-        });
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        pages.push({ bytes, width: canvas.width, height: canvas.height });
-
-        canvas.width = 0;
-        canvas.height = 0;
+        const page = await rasterizeSinglePageToJpeg(pdf, i, settings);
+        pages.push(page);
 
         if (opts.onProgress) opts.onProgress(i, total);
       }
@@ -660,9 +701,6 @@
 
     async function executeProcess() {
       if (selectedFiles.length === 0) return alert('ファイルを選択してください');
-      if (currentMode === 'compress' && !compressEstimateReady) {
-        return alert('推定サイズの計算が終わるまでお待ちください。');
-      }
 
       showLoading(true);
       try {
@@ -676,6 +714,7 @@
         } else if (currentMode === 'delete') {
           result = await processDelete();
         } else if (currentMode === 'compress') {
+          // 推定完了を待たず、その時点のスライダー設定で本番圧縮（案X）
           result = await processCompress();
         }
 
@@ -691,20 +730,12 @@
     async function processCompress() {
       const file = selectedFiles[0];
       const settings = getCompressSettings();
-      const cacheKey = getCompressCacheKey(file, settings);
 
-      let pages;
-      if (compressPagesCache && compressPagesCache.key === cacheKey) {
-        pages = compressPagesCache.pages;
-        showLoading(true, 'PDFを組み立て中...');
-      } else {
-        pages = await rasterizePdfToJpegs(file, settings, {
-          onProgress: (done, total) => {
-            showLoading(true, `圧縮中... ${done}/${total} ページ`);
-          }
-        });
-        compressPagesCache = { key: cacheKey, pages };
-      }
+      const pages = await rasterizePdfToJpegs(file, settings, {
+        onProgress: (done, total) => {
+          showLoading(true, `圧縮中... ${done}/${total} ページ`);
+        }
+      });
 
       if (pages.length === 0) throw new Error('ページを処理できませんでした。');
 
