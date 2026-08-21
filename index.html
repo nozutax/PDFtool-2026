@@ -75,13 +75,16 @@
     
     .drop-zone {
       border: 2px dashed #dcdde1; border-radius: 12px;
-      padding: 60px 20px; text-align: center; cursor: pointer;
+      padding: 40px 20px; text-align: center; cursor: default;
       transition: all 0.2s; background-color: #fafafa;
+      position: relative;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 180px;
     }
     .drop-zone:hover, .drop-zone.dragover {
       border-color: var(--primary-color); background-color: #f3f0ff;
     }
-    .drop-zone i { font-size: 3rem; color: #b2bec3; margin-bottom: 15px; display: block; }
+    .drop-zone.dragover { cursor: copy; }
     
     /* ファイルリスト */
     #file-list { margin-top: 20px; }
@@ -168,6 +171,100 @@
     .compress-note {
       font-size: 0.85rem; color: #747d8c; margin-top: 12px; line-height: 1.5;
     }
+
+    /* アップロード枠 + メニュー */
+    .drop-zone .drop-hint { margin: 0; color: #b2bec3; font-size: 0.85rem; }
+    .add-file-btn {
+      width: 56px; height: 56px; border-radius: 50%;
+      border: none; background: var(--primary-color); color: white;
+      font-size: 1.75rem; line-height: 1; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(108, 92, 231, 0.35);
+      transition: transform 0.15s, background 0.15s;
+    }
+    .add-file-btn:hover { background: #5849c2; transform: scale(1.05); }
+    .add-file-menu {
+      display: none; position: absolute; z-index: 20;
+      top: calc(50% + 40px); left: 50%; transform: translateX(-50%);
+      background: white; border: 1px solid #eaeaea; border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12); min-width: 220px; padding: 6px;
+    }
+    .add-file-menu.open { display: block; }
+    .add-file-menu button {
+      width: 100%; border: none; background: transparent; text-align: left;
+      padding: 10px 14px; border-radius: 8px; font-weight: 500; color: #2d3436;
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+    }
+    .add-file-menu button:hover { background: #f3f0ff; color: var(--primary-color); }
+    .add-file-menu button i { font-size: 1.15rem; }
+
+    /* Drive ブラウザ */
+    .drive-modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 10000;
+      background: rgba(45, 52, 54, 0.45);
+      align-items: center; justify-content: center; padding: 16px;
+    }
+    .drive-modal-overlay.open { display: flex; }
+    .drive-modal {
+      background: white; border-radius: 16px; width: min(640px, 100%);
+      max-height: min(80vh, 720px); display: flex; flex-direction: column;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.2); overflow: hidden;
+    }
+    .drive-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid #eee;
+    }
+    .drive-modal-header h5 { margin: 0; font-weight: 700; }
+    .drive-close-btn {
+      border: none; background: transparent; font-size: 1.4rem; color: #636e72; cursor: pointer;
+      width: 36px; height: 36px; border-radius: 8px;
+    }
+    .drive-close-btn:hover { background: #f1f2f6; }
+    .drive-breadcrumb {
+      display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+      padding: 10px 18px; background: #f8f9fa; border-bottom: 1px solid #eee;
+      font-size: 0.9rem;
+    }
+    .drive-breadcrumb button {
+      border: none; background: transparent; color: var(--primary-color);
+      font-weight: 600; cursor: pointer; padding: 2px 4px; border-radius: 4px;
+    }
+    .drive-breadcrumb button:hover { background: #eae6ff; }
+    .drive-breadcrumb .crumb-sep { color: #b2bec3; }
+    .drive-breadcrumb .crumb-current { color: #2d3436; font-weight: 600; }
+    .drive-list {
+      flex: 1; overflow: auto; padding: 8px 10px; min-height: 200px;
+    }
+    .drive-item {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; border: none; background: transparent; text-align: left;
+      padding: 10px 12px; border-radius: 8px; cursor: pointer; color: #2d3436;
+    }
+    .drive-item:hover { background: #f3f0ff; }
+    .drive-item.selected { background: #eae6ff; }
+    .drive-item i { font-size: 1.25rem; flex-shrink: 0; }
+    .drive-item .drive-item-name {
+      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;
+    }
+    .drive-item .drive-item-meta { font-size: 0.8rem; color: #999; flex-shrink: 0; }
+    .drive-empty, .drive-loading, .drive-error {
+      text-align: center; color: #747d8c; padding: 40px 16px;
+    }
+    .drive-modal-footer {
+      display: flex; justify-content: flex-end; gap: 8px;
+      padding: 12px 18px; border-top: 1px solid #eee;
+    }
+    .drive-modal-footer .btn-cancel {
+      border: 1px solid #dee2e6; background: white; border-radius: 8px;
+      padding: 8px 16px; font-weight: 600; cursor: pointer;
+    }
+    .drive-modal-footer .btn-add {
+      border: none; background: var(--primary-color); color: white; border-radius: 8px;
+      padding: 8px 18px; font-weight: 600; cursor: pointer;
+    }
+    .drive-modal-footer .btn-add:disabled {
+      opacity: 0.5; cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -212,10 +309,20 @@
       <!-- ステップ1: アップロード -->
       <h5 class="section-title"><span class="step-badge">1</span> ファイルをアップロード</h5>
       
-      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-        <i class="bi bi-file-earmark-pdf"></i>
-        <p>ここにファイルをドロップ</p>
-        <p class="sub-text" style="font-size:0.85rem; color:#b2bec3;">またはクリックして選択</p>
+      <div class="drop-zone" id="drop-zone">
+        <button type="button" class="add-file-btn" id="add-file-btn" title="ファイルを追加" aria-label="ファイルを追加">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+        <p class="drop-hint mt-3">ここにファイルをドロップ</p>
+        <p class="drop-hint">または ＋ から Drive / ローカルを選択</p>
+        <div class="add-file-menu" id="add-file-menu" role="menu">
+          <button type="button" id="menu-drive-btn" role="menuitem">
+            <i class="bi bi-google"></i> Google Drive
+          </button>
+          <button type="button" id="menu-upload-btn" role="menuitem">
+            <i class="bi bi-upload"></i> ファイルをアップロード
+          </button>
+        </div>
         <input type="file" id="file-input" hidden accept="application/pdf, image/jpeg, image/jpg" multiple>
       </div>
 
@@ -318,6 +425,26 @@
     </div>
   </div>
 
+  <!-- Drive フォルダブラウザ -->
+  <div class="drive-modal-overlay" id="drive-modal-overlay" aria-hidden="true">
+    <div class="drive-modal" role="dialog" aria-modal="true" aria-labelledby="drive-modal-title">
+      <div class="drive-modal-header">
+        <h5 id="drive-modal-title"><i class="bi bi-google me-2"></i>Google Drive</h5>
+        <button type="button" class="drive-close-btn" id="drive-close-btn" title="閉じる" aria-label="閉じる">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="drive-breadcrumb" id="drive-breadcrumb"></div>
+      <div class="drive-list" id="drive-list">
+        <div class="drive-loading">読み込み中...</div>
+      </div>
+      <div class="drive-modal-footer">
+        <button type="button" class="btn-cancel" id="drive-cancel-btn">キャンセル</button>
+        <button type="button" class="btn-add" id="drive-add-btn" disabled>追加</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ローディング -->
   <div id="loading-overlay">
     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
@@ -378,18 +505,237 @@
 
     const fileInput = document.getElementById('file-input');
     const dropZone = document.getElementById('drop-zone');
+    const addFileBtn = document.getElementById('add-file-btn');
+    const addFileMenu = document.getElementById('add-file-menu');
+    const menuDriveBtn = document.getElementById('menu-drive-btn');
+    const menuUploadBtn = document.getElementById('menu-upload-btn');
 
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault(); dropZone.classList.remove('dragover');
+      closeAddFileMenu();
       handleFiles(e.dataTransfer.files);
     });
+
+    addFileBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addFileMenu.classList.toggle('open');
+    });
+    menuUploadBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAddFileMenu();
+      fileInput.click();
+    });
+    menuDriveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAddFileMenu();
+      openDriveBrowser();
+    });
+    document.addEventListener('click', (e) => {
+      if (!addFileMenu.contains(e.target) && e.target !== addFileBtn && !addFileBtn.contains(e.target)) {
+        closeAddFileMenu();
+      }
+    });
+
+    function closeAddFileMenu() {
+      addFileMenu.classList.remove('open');
+    }
 
     fileInput.addEventListener('change', (e) => {
       handleFiles(e.target.files);
       fileInput.value = '';
     });
+
+    // ============================
+    // Google Drive（GAS: google.script.run）
+    // ============================
+    let driveCurrentFolderId = null;
+    let driveSelected = new Map();
+    let driveLoading = false;
+
+    function isGasRuntime() {
+      return !!(window.google && google.script && typeof google.script.run === 'object');
+    }
+
+    function openDriveBrowser() {
+      if (!isGasRuntime()) {
+        alert(
+          'Google Drive 参照は、GAS Webアプリとしてデプロイした版で利用できます。\n' +
+          '（利用者自身のマイドライブを参照するため executeAs: USER_ACCESSING が必要です）\n\n' +
+          'ローカルファイルは「ファイルをアップロード」またはドラッグ＆ドロップで追加できます。'
+        );
+        return;
+      }
+      driveSelected.clear();
+      document.getElementById('drive-add-btn').disabled = true;
+      document.getElementById('drive-modal-overlay').classList.add('open');
+      document.getElementById('drive-modal-overlay').setAttribute('aria-hidden', 'false');
+      loadDriveFolder(null);
+    }
+
+    function closeDriveBrowser() {
+      document.getElementById('drive-modal-overlay').classList.remove('open');
+      document.getElementById('drive-modal-overlay').setAttribute('aria-hidden', 'true');
+      driveSelected.clear();
+    }
+
+    document.getElementById('drive-close-btn').addEventListener('click', closeDriveBrowser);
+    document.getElementById('drive-cancel-btn').addEventListener('click', closeDriveBrowser);
+    document.getElementById('drive-modal-overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'drive-modal-overlay') closeDriveBrowser();
+    });
+    document.getElementById('drive-add-btn').addEventListener('click', addSelectedDriveFiles);
+
+    function loadDriveFolder(folderId) {
+      if (driveLoading) return;
+      driveLoading = true;
+      driveCurrentFolderId = folderId;
+      driveSelected.clear();
+      document.getElementById('drive-add-btn').disabled = true;
+      document.getElementById('drive-list').innerHTML = '<div class="drive-loading">読み込み中...</div>';
+      document.getElementById('drive-breadcrumb').innerHTML = '';
+
+      google.script.run
+        .withSuccessHandler((data) => {
+          driveLoading = false;
+          renderDriveBrowser(data);
+        })
+        .withFailureHandler((err) => {
+          driveLoading = false;
+          document.getElementById('drive-list').innerHTML =
+            `<div class="drive-error">読み込みに失敗しました。<br>${escapeHtml(err && err.message ? err.message : String(err))}</div>`;
+        })
+        .listDriveFolder(folderId || null);
+    }
+
+    function renderDriveBrowser(data) {
+      const crumbEl = document.getElementById('drive-breadcrumb');
+      crumbEl.innerHTML = '';
+      (data.path || []).forEach((crumb, idx, arr) => {
+        if (idx > 0) {
+          const sep = document.createElement('span');
+          sep.className = 'crumb-sep';
+          sep.textContent = '›';
+          crumbEl.appendChild(sep);
+        }
+        if (idx === arr.length - 1) {
+          const span = document.createElement('span');
+          span.className = 'crumb-current';
+          span.textContent = crumb.name;
+          crumbEl.appendChild(span);
+        } else {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = crumb.name;
+          btn.addEventListener('click', () => loadDriveFolder(crumb.id));
+          crumbEl.appendChild(btn);
+        }
+      });
+
+      const listEl = document.getElementById('drive-list');
+      listEl.innerHTML = '';
+      const folders = data.folders || [];
+      const files = data.files || [];
+
+      if (!folders.length && !files.length) {
+        listEl.innerHTML = '<div class="drive-empty">このフォルダには PDF / JPEG がありません</div>';
+        return;
+      }
+
+      folders.forEach((folder) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'drive-item';
+        btn.innerHTML =
+          `<i class="bi bi-folder-fill text-warning"></i>` +
+          `<span class="drive-item-name">${escapeHtml(folder.name)}</span>` +
+          `<span class="drive-item-meta">フォルダ</span>`;
+        btn.addEventListener('click', () => loadDriveFolder(folder.id));
+        listEl.appendChild(btn);
+      });
+
+      files.forEach((file) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'drive-item';
+        btn.dataset.fileId = file.id;
+        const icon = file.mimeType === 'application/pdf'
+          ? 'bi-file-earmark-pdf text-danger'
+          : 'bi-file-earmark-image text-primary';
+        const sizeLabel = file.size != null ? formatBytes(file.size) : '';
+        btn.innerHTML =
+          `<i class="bi ${icon}"></i>` +
+          `<span class="drive-item-name">${escapeHtml(file.name)}</span>` +
+          `<span class="drive-item-meta">${sizeLabel}</span>`;
+        btn.addEventListener('click', () => toggleDriveFileSelection(file, btn));
+        listEl.appendChild(btn);
+      });
+    }
+
+    function toggleDriveFileSelection(file, btnEl) {
+      const multi = currentMode === 'merge';
+      if (driveSelected.has(file.id)) {
+        driveSelected.delete(file.id);
+        btnEl.classList.remove('selected');
+      } else {
+        if (!multi) {
+          driveSelected.clear();
+          document.querySelectorAll('.drive-item.selected').forEach((el) => el.classList.remove('selected'));
+        }
+        if (multi && driveSelected.size >= 10) {
+          alert('一度に追加できるファイルは最大10件です。');
+          return;
+        }
+        driveSelected.set(file.id, file);
+        btnEl.classList.add('selected');
+      }
+      document.getElementById('drive-add-btn').disabled = driveSelected.size === 0;
+    }
+
+    async function addSelectedDriveFiles() {
+      if (!driveSelected.size) return;
+      const ids = Array.from(driveSelected.keys());
+      closeDriveBrowser();
+      showLoading(true, `Driveから取得中... 0/${ids.length}`);
+
+      try {
+        const files = [];
+        for (let i = 0; i < ids.length; i++) {
+          showLoading(true, `Driveから取得中... ${i + 1}/${ids.length}`);
+          const meta = await gasRun_('getFileFromDrive', ids[i]);
+          files.push(drivePayloadToFile(meta));
+        }
+        handleFiles(files);
+      } catch (e) {
+        alert('Driveからの取得に失敗しました:\n' + (e && e.message ? e.message : e));
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function gasRun_(fnName, arg) {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)[fnName](arg);
+      });
+    }
+
+    function drivePayloadToFile(meta) {
+      const bin = atob(meta.base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new File([bytes], meta.name, { type: meta.mimeType || 'application/octet-stream' });
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
 
     function handleFiles(files) {
       if (!files || files.length === 0) return;
