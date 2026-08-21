@@ -1,0 +1,13 @@
+# clasp がアップロードしないファイル
+node_modules/**
+.git/**
+.cursor/**
+**/.DS_Store
+.gitignore
+.clasp.json.example
+GAS-DEPLOY.md
+AGENTS.md
+package.json
+package-lock.json
+*.log
+.clasprc.json

@@ -1,37 +1,42 @@
 # GAS デプロイ手順（Google Drive 参照）
 
-開発ログ（2026-08-12）と同じ方式です。`executeAs: USER_ACCESSING` により、**アクセスした利用者自身のマイドライブ**を参照します。
+## 多ユーザ前提（重要）
 
-## 初回
+`appsscript.json` は次のとおりです。
 
-```bash
-npm i -g @google/clasp
-clasp login
-clasp create --type webapp --title "PDF Tools" --rootDir .
-# 生成された .clasp.json をリポジトリに含めない場合は .gitignore へ
-clasp push -f
+```json
+"webapp": {
+  "executeAs": "USER_ACCESSING",
+  "access": "ANYONE"
+}
 ```
 
-## 再デプロイ（重要）
+- **`USER_ACCESSING`**: スクリプトは「開いた人」の権限で動く → **利用者自身のマイドライブ**を参照
+- **`USER_DEPLOYING` にはしない**: デプロイ者（オーナー）の Drive 固定になってしまう
+- 利用者は初回に Google ログイン＋ Drive 同意が必要（あなた以外のアカウントでも可）
 
-`appsscript.json` の `webapp`（特に `executeAs`）は **push だけでは反映されません**。
+## 公開中のプロジェクト
+
+| 項目 | 値 |
+|------|-----|
+| scriptId | `1gakhF3xf3vs_sl3CC6K297j-qhhVbqWmbQE0PEW8i8farqowTU4IeVt1` |
+| エディタ | https://script.google.com/d/1gakhF3xf3vs_sl3CC6K297j-qhhVbqWmbQE0PEW8i8farqowTU4IeVt1/edit |
+| WebアプリURL | https://script.google.com/macros/s/AKfycby8vRyOoaDgL4hGR9k3xQwWpKjkkdTLEs3XXnIi17XmdgYJssaHMvwih9mW1ac9I9X9/exec |
+| deploymentId | `AKfycby8vRyOoaDgL4hGR9k3xQwWpKjkkdTLEs3XXnIi17XmdgYJssaHMvwih9mW1ac9I9X9` |
+
+ローカルで clasp を使う場合は `.clasp.json.example` をコピーして `scriptId` を上記に設定。
+
+## 再デプロイ
+
+`webapp` 設定は push だけでは反映されない。バージョン作成＋既存 deploymentId 指定で再デプロイする。
 
 ```bash
-clasp push -f
-clasp create-version "Drive参照と+メニュー追加"
-clasp create-deployment -i <既存deploymentId> -V <新バージョン番号>
+npx clasp push -f
+npx clasp version "変更内容"
+npx clasp deploy -i AKfycby8vRyOoaDgL4hGR9k3xQwWpKjkkdTLEs3XXnIi17XmdgYJssaHMvwih9mW1ac9I9X9 -V <新バージョン番号>
 ```
-
-初回デプロイ後に出る Web アプリ URL を利用者に共有してください。
-
-## 動作確認
-
-1. GAS URL を別タブで開く（iframe 埋め込みはサードパーティ Cookie 制限で失敗しやすい）
-2. 初回は OAuth 同意（未検証アプリは「詳細 → 安全ではないページに移動」）
-3. 「＋」→ Google Drive → マイドライブ階層から PDF/JPEG を追加
 
 ## GitHub Pages との関係
 
-- https://nozutax.github.io/PDFtool-2026/ は静的ホストのため `google.script.run` が無く、Drive メニューは案内アラートになります
-- ローカル Upload / DnD / 分割・結合・圧縮は Pages でも動作します
-- Drive 連携を使う場合は GAS Web アプリ URL を利用してください
+- https://nozutax.github.io/PDFtool-2026/ … 静的ホスト（ローカル Upload のみ。Drive は案内アラート）
+- 上記 GAS URL … Drive 連携あり（利用者ごとのマイドライブ）
